@@ -278,7 +278,7 @@ def run_on_windows(host, port, log_level, options, app) -> None:
     run_langflow(host, port, log_level, options, app)
 
 
-def is_port_in_use(port, host="localhost"):
+def is_port_in_use(port, host="0.0.0.0"):
     """Check if a port is in use.
 
     Args:

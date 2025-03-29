@@ -1,0 +1,89 @@
+services:
+  # The postgres database.
+  db:
+    image: postgres:15-alpine
+    restart: always
+    env_file:
+      - ./middleware.env
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123456}
+      POSTGRES_DB: ${POSTGRES_DB:-langflow}
+      PGDATA: ${PGDATA:-/var/lib/postgresql/data/pgdata}
+    command: >
+      postgres -c 'max_connections=${POSTGRES_MAX_CONNECTIONS:-100}'
+               -c 'shared_buffers=${POSTGRES_SHARED_BUFFERS:-128MB}'
+               -c 'work_mem=${POSTGRES_WORK_MEM:-4MB}'
+               -c 'maintenance_work_mem=${POSTGRES_MAINTENANCE_WORK_MEM:-64MB}'
+               -c 'effective_cache_size=${POSTGRES_EFFECTIVE_CACHE_SIZE:-4096MB}'
+    volumes:
+      - ${PGDATA_HOST_VOLUME:-./volumes/db/data}:/var/lib/postgresql/data
+    ports:
+      - "${EXPOSE_POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: [ "CMD", "pg_isready" ]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
+  # The redis cache.
+#  redis:
+#    image: redis:6-alpine
+#    restart: always
+#    env_file:
+#      - ./middleware.env
+#    environment:
+#      REDISCLI_AUTH: ${REDIS_PASSWORD:-123456}
+#    volumes:
+#      # Mount the redis data directory to the container.
+#      - ${REDIS_HOST_VOLUME:-./volumes/redis/data}:/data
+#    # Set the redis password when startup redis server.
+#    command: redis-server --requirepass ${REDIS_PASSWORD:-123456}
+#    ports:
+#      - "${EXPOSE_REDIS_PORT:-6379}:6379"
+#    healthcheck:
+#      test: [ "CMD", "redis-cli", "ping" ]
+
+  redis-stack:
+    image: redis/redis-stack-server:latest
+    container_name: redis-stack-server
+    ports:
+      - "6379:6379"
+    # 如果使用 redis-stack 镜像，请解开注释，8001端口为 Redis Insight WEB UI 默认端口
+    # - "8001:8001"
+    volumes:
+      - /usr/local/software/docker/redisStack/redis-stack.conf:/etc/redis-stack.conf
+      # 1.使用主机绝对路径挂载数据
+      - /usr/local/software/docker/redisStack/data:/data
+    # 2.如果使用 docker 卷挂载数据，需要定义 'volumes:'
+    # - redis-data:/data
+    command: [ "redis-server", "/etc/redis-stack.conf" ]
+    restart: always
+
+  # The Weaviate vector store.
+  weaviate:
+    image: semitechnologies/weaviate:1.19.0
+    profiles:
+      - ""
+      - weaviate
+    restart: always
+    volumes:
+      # Mount the Weaviate data directory to the container.
+      - ${WEAVIATE_HOST_VOLUME:-./volumes/weaviate}:/var/lib/weaviate
+    env_file:
+      - ./middleware.env
+    environment:
+      # The Weaviate configurations
+      # You can refer to the [Weaviate](https://weaviate.io/developers/weaviate/config-refs/env-vars) documentation for more information.
+      PERSISTENCE_DATA_PATH: ${WEAVIATE_PERSISTENCE_DATA_PATH:-/var/lib/weaviate}
+      QUERY_DEFAULTS_LIMIT: ${WEAVIATE_QUERY_DEFAULTS_LIMIT:-25}
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: ${WEAVIATE_AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED:-false}
+      DEFAULT_VECTORIZER_MODULE: ${WEAVIATE_DEFAULT_VECTORIZER_MODULE:-none}
+      CLUSTER_HOSTNAME: ${WEAVIATE_CLUSTER_HOSTNAME:-node1}
+      AUTHENTICATION_APIKEY_ENABLED: ${WEAVIATE_AUTHENTICATION_APIKEY_ENABLED:-true}
+      AUTHENTICATION_APIKEY_ALLOWED_KEYS: ${WEAVIATE_AUTHENTICATION_APIKEY_ALLOWED_KEYS:-WVF5YThaHlkYwhGUSmCRgsX3tD5ngdN8pkih}
+      AUTHENTICATION_APIKEY_USERS: ${WEAVIATE_AUTHENTICATION_APIKEY_USERS:-ewjh}
+      AUTHORIZATION_ADMINLIST_ENABLED: ${WEAVIATE_AUTHORIZATION_ADMINLIST_ENABLED:-true}
+      AUTHORIZATION_ADMINLIST_USERS: ${WEAVIATE_AUTHORIZATION_ADMINLIST_USERS:-ewjh}
+    ports:
+      - "${EXPOSE_WEAVIATE_PORT:-8080}:8080"
+
